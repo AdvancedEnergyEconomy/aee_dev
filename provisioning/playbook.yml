@@ -1,28 +1,12 @@
 ---
 - hosts: all
   vars:
-    home: ~/ # Your ~/
+    home: /Users/bradleysheehan
     src_home: ~/Dev # Where your code lives
     applications: # .dmg, .app, .zip type applications via brew-cask
       - google-chrome
       - firefox
       - sublime-text
- 
-    projects: # An array of projects to get setup
-      - name: pennsylvania # This will be the pow host, project-1.dev in this case
-        git: git@github.com:AdvancedEnergyEconomy/pennsylvania.git
-        path: pennsylvania
-        pow: true # Setup a pow host for this project
- 
-      - name: parkplace
-        git: git@github.com:AdvancedEnergyEconomy/parkplace.git
-        path: parkplace
-		pow: true
-		
-	  - name: omniauth-parkplace
-	   	git: git@github.com:AdvancedEnergyEconomy/omniauth-parkplace.git
-	   	path: omniauth-parkplace
-		pow: true
 
   tasks:
     - name: Install libraries with homebrew
@@ -37,80 +21,36 @@
         - phantomjs
         - redis
         - tmux
-        - zsh
- 
-    # For any formula that has Caveats, run `brew info formula` to see what they are and add them to your playbook.
-    - name: Start services at login
-      file: src=/usr/local/opt/{{ item }}/homebrew.mxcl.{{ item }}.plist path=~/Library/LaunchAgents/homebrew.mxcl.{{ item }}.plist state=link force=yes
-      with_items: 
-        - postgresql
- 
+
     - name: Setup launch agents for services
       command: launchctl load {{ home }}/Library/LaunchAgents/homebrew.mxcl.{{ item }}.plist
       with_items:
         - postgresql
- 
+
     - name: Check if Pow is installed
       stat: path={{ home }}/.pow
       register: pow_installed
- 
+
     - name: Install Pow
       shell: curl get.pow.cx | sh
       when: pow_installed.stat.exists == false
- 
+
     - name: Create src folder
       file: path={{ src_home }} state=directory
- 
-    - name: Clone projects from github
-      git: repo={{ item.git }} dest={{ src_home }}/{{ item.path }}
-      with_items: projects
- 
-    # Runs `rbenv versions` and stores the result in installed_rubies.
-    # We'll use the variable later to figure out which versions are installed
-    # and which ones we still need
-    - name: Installed rubies
-      shell: rvm list
-      register: installed_rubies
- 
-    # This assumes that all of your projects have a .ruby-version
-    # and goes through and collects all of the rubies needed. 
-    - name: Project specific rubies needed
-      shell: cat {{ src_home }}/{{ item.path }}/.ruby-version
-      register: rubies_needed
-      with_items: projects
- 
-    # Here we use rubies_needed and installed_rubies to figure out what
-    # rbenv/ruby-build needs to install. There's an issue with this if you
-    # have two projects that have the same version, I might just end up 
-    # specifying the ruby version along with the project instead.
-    - name: Install .ruby-versions
-      shell: rbenv install {{ item.stdout }}
-      with_items: rubies_needed.results
-      when: installed_rubies.stdout.find(item.stdout) == -1      
- 
-    # Sets up a symlink for pow for every project that has pow: true set
-    - name: Pow host for projects
-      file: path={{ home }}/.pow/{{ item.name }} src={{ src_home }}/{{ item.path }} state=link
-      when: item.pow|default(false)
-      with_items: projects
- 
+
     - name: Check for installed apps
       shell: brew cask list | grep {{ item }}
       register: installed_applications
       with_items: applications
       ignore_errors: true
- 
+
     - name: Install apps with brew-cask
       shell: brew cask install {{ item }}
       with_items: applications
       when: item not in installed_applications.results|map(attribute='stdout')
-	  
+
     - name: install RVM
       shell: curl -L https://get.rvm.io | bash -s -- --ignore-dotfiles creates=~/.rvm
-      tags: [ruby]
-
-    - name: install Ruby 2.0
-      shell: rvm install --default $ruby creates=~/.rvm/rubies/$ruby
       tags: [ruby]
 
     - name: install base gems
